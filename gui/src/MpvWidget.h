@@ -1,6 +1,7 @@
 #pragma once
 #include <QOpenGLWidget>
 #include <QStringList>
+#include <QVariant>
 #include <mpv/client.h>
 #include <mpv/render_gl.h>
 
@@ -11,11 +12,14 @@ public:
     ~MpvWidget() override;
 
     void command(const QStringList &args);
+    void commandSync(const QStringList &args);
+    QVariant getProperty(const QString &name);
     void setProperty(const QString &name, const QString &value);
     void loadFile(const QString &path);
 
 signals:
-    void mpvEvent();
+    void playlistChanged();
+    void tracksChanged();
 
 protected:
     void initializeGL() override;
