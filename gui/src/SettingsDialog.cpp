@@ -1,5 +1,6 @@
 #include "SettingsDialog.h"
 #include "SkinManager.h"
+#include <QCheckBox>
 #include <QComboBox>
 #include <QPushButton>
 #include <QCoreApplication>
@@ -30,10 +31,19 @@ SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent)
     volume_->setRange(0, 130);
     volume_->setValue(s.value("volume", 100).toInt());
 
+    resume_ = new QCheckBox("Remember playback position (auto-saves every 30s)");
+    resume_->setChecked(s.value("resume", false).toBool());
+
+    quality_ = new QComboBox;
+    quality_->addItems({"", "best", "1080", "720", "480", "360"});
+    quality_->setCurrentText(s.value("quality", "").toString());
+
     auto *form = new QFormLayout(this);
     form->addRow("Skin", skin_);
     form->addRow("Hardware decoding (empty = mpv.conf)", hwdec_);
     form->addRow("Startup volume", volume_);
+    form->addRow(resume_);
+    form->addRow("Online video quality (empty = mpv.conf)", quality_);
 
     auto *box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Apply | QDialogButtonBox::Cancel);
     form->addRow(box);
@@ -48,5 +58,7 @@ void SettingsDialog::save()
     s.setValue("skin", skin_->currentText());
     s.setValue("hwdec", hwdec_->currentText());
     s.setValue("volume", volume_->value());
+    s.setValue("resume", resume_->isChecked());
+    s.setValue("quality", quality_->currentText());
     emit applied();
 }

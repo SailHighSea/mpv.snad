@@ -26,7 +26,10 @@ set(PC $<TARGET_FILE_DIR:mpv-snad>/portable_config)
 add_custom_command(TARGET mpv-snad POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory ${PC}
     COMMAND ${CMAKE_COMMAND} -E copy ${REPO_ROOT}/mpv.conf ${REPO_ROOT}/input.conf ${PC}
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${REPO_ROOT}/scripts ${PC}/scripts
+    # Only the skin/feature scripts ship; the rest are replaced by native GUI features.
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${PC}/scripts
+    COMMAND ${CMAKE_COMMAND} -E copy ${REPO_ROOT}/scripts/snad-osc.lua ${REPO_ROOT}/scripts/podcast.lua
+            ${REPO_ROOT}/scripts/visualizer.lua ${PC}/scripts
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${REPO_ROOT}/script-opts ${PC}/script-opts
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${REPO_ROOT}/shaders ${PC}/shaders
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${REPO_ROOT}/fonts ${PC}/fonts

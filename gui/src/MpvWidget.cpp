@@ -6,6 +6,28 @@
 #include <QByteArray>
 #include <vector>
 
+static QVariant nodeToVariant(const mpv_node *n)
+{
+    switch (n->format) {
+    case MPV_FORMAT_STRING: return QString::fromUtf8(n->u.string);
+    case MPV_FORMAT_FLAG: return bool(n->u.flag);
+    case MPV_FORMAT_INT64: return qlonglong(n->u.int64);
+    case MPV_FORMAT_DOUBLE: return n->u.double_;
+    case MPV_FORMAT_NODE_ARRAY: {
+        QVariantList l;
+        for (int i = 0; i < n->u.list->num; i++) l << nodeToVariant(&n->u.list->values[i]);
+        return l;
+    }
+    case MPV_FORMAT_NODE_MAP: {
+        QVariantMap m;
+        for (int i = 0; i < n->u.list->num; i++)
+            m[QString::fromUtf8(n->u.list->keys[i])] = nodeToVariant(&n->u.list->values[i]);
+        return m;
+    }
+    default: return {};
+    }
+}
+
 static void *getProcAddress(void *, const char *name)
 {
     auto *ctx = QOpenGLContext::currentContext();
@@ -21,12 +43,19 @@ MpvWidget::MpvWidget(const QString &configDir, QWidget *parent) : QOpenGLWidget(
     // Load the repo's mpv.conf / input.conf / scripts exactly as the stock player would.
     mpv_set_option_string(mpv_, "config", "yes");
     mpv_set_option_string(mpv_, "config-dir", configDir.toUtf8().constData());
-    mpv_set_option_string(mpv_, "osc", "yes");
     mpv_set_option_string(mpv_, "input-default-bindings", "yes");
     mpv_set_option_string(mpv_, "input-vo-keyboard", "yes");
     mpv_set_option_string(mpv_, "load-scripts", "yes");
-    mpv_set_option_string(mpv_, "vo", "libmpv");
     mpv_initialize(mpv_);
+
+    // mpv.conf targets the standalone player (vo=gpu-next, d3d11). Re-assert what the render API
+    // needs after the config is loaded. osc stays whatever mpv.conf says (osc=no + snad-osc.lua).
+    mpv_set_property_string(mpv_, "vo", "libmpv");
+    mpv_set_property_string(mpv_, "hwdec", "auto-copy"); // d3d11va can't interop with the GL render path
+
+    mpv_observe_property(mpv_, 0, "playlist", MPV_FORMAT_NONE);
+    mpv_observe_property(mpv_, 0, "playlist-pos", MPV_FORMAT_NONE);
+    mpv_observe_property(mpv_, 0, "track-list", MPV_FORMAT_NONE);
 
     mpv_set_wakeup_callback(mpv_, [](void *ctx) {
         QMetaObject::invokeMethod(static_cast<MpvWidget *>(ctx), "drainEvents", Qt::QueuedConnection);
@@ -72,7 +101,11 @@ void MpvWidget::drainEvents()
 {
     while (mpv_event *ev = mpv_wait_event(mpv_, 0)) {
         if (ev->event_id == MPV_EVENT_NONE) break;
-        emit mpvEvent();
+        if (ev->event_id == MPV_EVENT_PROPERTY_CHANGE) {
+            const QString name = static_cast<mpv_event_property *>(ev->data)->name;
+            if (name == "playlist" || name == "playlist-pos") emit playlistChanged();
+            else if (name == "track-list") emit tracksChanged();
+        }
     }
 }
 
@@ -84,6 +117,25 @@ void MpvWidget::command(const QStringList &args)
     for (auto &b : bytes) argv.push_back(b.constData());
     argv.push_back(nullptr);
     mpv_command_async(mpv_, 0, argv.data());
+}
+
+void MpvWidget::commandSync(const QStringList &args)
+{
+    std::vector<QByteArray> bytes;
+    for (const QString &a : args) bytes.push_back(a.toUtf8());
+    std::vector<const char *> argv;
+    for (auto &b : bytes) argv.push_back(b.constData());
+    argv.push_back(nullptr);
+    mpv_command(mpv_, argv.data());
+}
+
+QVariant MpvWidget::getProperty(const QString &name)
+{
+    mpv_node node;
+    if (mpv_get_property(mpv_, name.toUtf8().constData(), MPV_FORMAT_NODE, &node) < 0) return {};
+    QVariant v = nodeToVariant(&node);
+    mpv_free_node_contents(&node);
+    return v;
 }
 
 void MpvWidget::setProperty(const QString &name, const QString &value)

@@ -1,6 +1,7 @@
 #pragma once
 #include <QDialog>
 
+class QCheckBox;
 class QComboBox;
 class QSpinBox;
 
@@ -18,4 +19,6 @@ private:
     void save();
     QComboBox *skin_, *hwdec_;
     QSpinBox *volume_;
+    QCheckBox *resume_;
+    QComboBox *quality_;
 };
