@@ -21,12 +21,15 @@ MpvWidget::MpvWidget(const QString &configDir, QWidget *parent) : QOpenGLWidget(
     // Load the repo's mpv.conf / input.conf / scripts exactly as the stock player would.
     mpv_set_option_string(mpv_, "config", "yes");
     mpv_set_option_string(mpv_, "config-dir", configDir.toUtf8().constData());
-    mpv_set_option_string(mpv_, "osc", "yes");
     mpv_set_option_string(mpv_, "input-default-bindings", "yes");
     mpv_set_option_string(mpv_, "input-vo-keyboard", "yes");
     mpv_set_option_string(mpv_, "load-scripts", "yes");
-    mpv_set_option_string(mpv_, "vo", "libmpv");
     mpv_initialize(mpv_);
+
+    // mpv.conf targets the standalone player (vo=gpu-next, d3d11). Re-assert what the render API
+    // needs after the config is loaded. osc stays whatever mpv.conf says (osc=no + snad-osc.lua).
+    mpv_set_property_string(mpv_, "vo", "libmpv");
+    mpv_set_property_string(mpv_, "hwdec", "auto-copy"); // d3d11va can't interop with the GL render path
 
     mpv_set_wakeup_callback(mpv_, [](void *ctx) {
         QMetaObject::invokeMethod(static_cast<MpvWidget *>(ctx), "drainEvents", Qt::QueuedConnection);
